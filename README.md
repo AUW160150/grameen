@@ -2,6 +2,12 @@
 
 > **Hackathon project** — Turn established artisan brands like Aarong into US market contenders using autonomous GTM agents, Apify web intelligence, and social automation.
 
+## 🎥 Demo
+
+[![Watch the demo](https://cdn.loom.com/sessions/thumbnails/4b37a1190d5940f78c6fa68215a0fcc9-with-play.gif)](https://www.loom.com/share/4b37a1190d5940f78c6fa68215a0fcc9)
+
+> [▶ Watch full demo on Loom](https://www.loom.com/share/4b37a1190d5940f78c6fa68215a0fcc9)
+
 ---
 
 ## What is Grameen?
