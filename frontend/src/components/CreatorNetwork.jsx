@@ -91,10 +91,10 @@ export default function CreatorNetwork() {
               {/* Reel frame using the apparel image */}
               <div className="relative" style={{ aspectRatio: '9/16', maxHeight: 480 }}>
                 <img
-                  src="/grameen-apparel.jpg"
+                  src="/image2.jpg"
                   alt="Creator wearing Aarong handloom saree"
                   className="w-full h-full object-cover object-top"
-                  onError={e => e.target.src = '/grameen2.jpg'}
+                  onError={e => e.target.src = '/grameen-apparel.jpg'}
                 />
                 {/* Dark cinematic overlay */}
                 <div className="absolute inset-0 bg-gradient-to-t from-bark/80 via-transparent to-bark/20" />
