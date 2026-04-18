@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 
 /* ── Design tokens (matching BioHarmonize pipeline aesthetic) ── */
@@ -303,6 +303,7 @@ export default function Dashboard() {
   const [reels, setReels] = useState(0)
   const [done, setDone] = useState(false)
   const [running, setRunning] = useState(false)
+  const navigate = useNavigate()
   const [apiMode, setApiMode] = useState(null) // null | 'live' | 'demo'
   const [jobId, setJobId] = useState(null)
   const [realLeads, setRealLeads] = useState([])
@@ -650,6 +651,15 @@ export default function Dashboard() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {running && <span style={{ fontFamily: 'monospace', fontSize: 12, color: C.muted }}>~{timeLeft}s remaining</span>}
+              {done && (
+                <button onClick={() => navigate('/results')} style={{
+                  padding: '6px 16px', background: C.success, border: 'none', borderRadius: 7,
+                  color: 'white', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  View Results →
+                </button>
+              )}
               <span style={{ fontSize: 10, color: C.muted }}>Powered by</span>
               <span style={{ fontSize: 10, color: C.accent, fontWeight: 700 }}>Apify</span>
             </div>
