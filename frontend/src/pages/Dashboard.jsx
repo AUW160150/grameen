@@ -35,13 +35,13 @@ const LOG_TIMELINE = [
   { t: 4600,  k: 'apify',   company: 'The Detox Market', segment: 'Clean beauty buyer',              score: 0.83 },
   { t: 5000,  k: 'apify',   company: 'Package Free Shop', segment: 'Zero-waste sourcing',           score: 0.81 },
   { t: 5600,  k: 'success', txt: '[Apify] 2,400 companies scanned · 62 high-fit ICP matches found (conf ≥ 0.80)' },
-  { t: 6300,  k: 'info',    txt: 'Contact Enricher: searching LinkedIn via Apify (site:linkedin.com query per company)…' },
-  { t: 6600,  k: 'info',    txt: '[Apify] Query: site:linkedin.com/in "Anthropologie" (sourcing OR buyer OR procurement)' },
-  { t: 6800,  k: 'enrich',  name: 'Sarah Chen',       title: 'VP Sourcing, Anthropologie',         email: 'LinkedIn profile found · email via Hunter.io' },
-  { t: 7100,  k: 'enrich',  name: 'Marcus Webb',      title: 'Ethical Goods Dir., World Market',   email: 'LinkedIn profile found · email via Hunter.io' },
-  { t: 7400,  k: 'info',    txt: '[Apify] Query: site:linkedin.com/in "Whole Foods" (sourcing OR buyer OR procurement)' },
-  { t: 7700,  k: 'enrich',  name: 'Priya Nair',       title: 'Global Buyer, Whole Foods',          email: 'LinkedIn profile found · email via Hunter.io' },
-  { t: 8100,  k: 'success', txt: 'Contact enrichment complete · LinkedIn profiles found via Apify · emails resolved via Hunter.io domain search' },
+  { t: 6300,  k: 'info',    txt: 'Contact Enricher: querying Apollo.io people search for buyer contacts…' },
+  { t: 6600,  k: 'info',    txt: '[Apollo.io] Searching: company="Anthropologie" · titles=[sourcing manager, buyer, VP sourcing, category manager]' },
+  { t: 6800,  k: 'enrich',  name: 'Sarah Chen',       title: 'VP Sourcing, Anthropologie',         email: 'apollo.io · email masked (free tier — 1 credit to reveal)' },
+  { t: 7100,  k: 'enrich',  name: 'Marcus Webb',      title: 'Ethical Goods Dir., World Market',   email: 'apollo.io · LinkedIn profile confirmed' },
+  { t: 7400,  k: 'info',    txt: '[Apollo.io] Searching: company="Whole Foods Market" · titles=[global buyer, category buyer, sourcing]' },
+  { t: 7700,  k: 'enrich',  name: 'Priya Nair',       title: 'Global Category Buyer, Whole Foods', email: 'apollo.io · email masked (free tier — 1 credit to reveal)' },
+  { t: 8100,  k: 'success', txt: 'Contact enrichment complete · 3 verified profiles via Apollo.io · emails available on paid unlock' },
   { t: 8900,  k: 'info',    txt: 'Outreach Agent: drafting personalized buyer pitches…' },
   { t: 9400,  k: 'email',   to: 'Sarah Chen', subject: 'Aarong handloom textiles — premium sourcing opportunity for Anthropologie' },
   { t: 9800,  k: 'email',   to: 'Marcus Webb', subject: 'Artisan jamdani weaves from Bangladesh — World Market fit' },
@@ -403,10 +403,11 @@ export default function Dashboard() {
               }))
             }
             if (result.linkedin_contacts?.length) {
-              newEntries.push({ k: 'info', txt: '[Apify] LinkedIn contact search complete — real profiles found:' })
+              const src = result.linkedin_contacts[0]?.source || 'Apollo.io'
+              newEntries.push({ k: 'info', txt: `[${src}] Real contact enrichment complete — profiles found:` })
               result.linkedin_contacts.slice(0, 3).forEach(c => newEntries.push({
                 k: 'enrich', name: c.name, title: `${c.role} · ${c.company}`,
-                email: c.linkedin_url ? '↗ LinkedIn profile found' : 'Profile pending',
+                email: c.email || (c.linkedin_url ? '↗ LinkedIn profile found' : 'Profile pending'),
               }))
             }
             setLogEntries(prev => [...prev, ...newEntries])

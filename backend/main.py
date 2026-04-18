@@ -7,10 +7,12 @@ from apify_client import ApifyClient
 from typing import Optional
 import pdfplumber
 import docx
+import httpx
 
 load_dotenv()
 
 APIFY_KEY = os.getenv("APIFY_API_KEY")
+APOLLO_KEY = os.getenv("APOLLO_API_KEY", "")
 client = ApifyClient(APIFY_KEY)
 
 app = FastAPI(title="Grameen GTM API")
@@ -58,24 +60,66 @@ def apify_google_search(query: str, max_results: int = 20) -> list[dict]:
     return items[:max_results]
 
 
-def find_linkedin_contacts(company: str, role_keywords: str = "sourcing OR buyer OR procurement") -> list[dict]:
+def apollo_people_search(company: str, titles: list[str] | None = None) -> list[dict]:
     """
-    Use Apify Google Search to find LinkedIn profiles of buyers at a given company.
-    Returns list of {name, title, linkedin_url} dicts.
+    Search Apollo.io for buyers at a given company.
+    Returns name, title, LinkedIn URL, and (masked) email from Apollo free tier.
+    Falls back to Apify LinkedIn Google search if no Apollo key is set.
     """
-    query = f'site:linkedin.com/in "{company}" ({role_keywords})'
+    if not APOLLO_KEY:
+        return _linkedin_search_fallback(company)
+
+    if titles is None:
+        titles = ["sourcing manager", "buyer", "procurement manager",
+                  "category manager", "VP sourcing", "director of sourcing"]
+    try:
+        resp = httpx.post(
+            "https://api.apollo.io/api/v1/mixed_people/search",
+            headers={"Content-Type": "application/json", "Cache-Control": "no-cache"},
+            json={
+                "api_key": APOLLO_KEY,
+                "q_organization_names": [company],
+                "person_titles": titles,
+                "per_page": 5,
+                "page": 1,
+            },
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        contacts = []
+        for p in data.get("people", []):
+            email = p.get("email") or ""
+            # Apollo masks emails on free tier as "u***@domain.com" — mark as masked
+            email_display = email if (email and "***" not in email) else f"Reveal via Apollo ({email})"
+            contacts.append({
+                "name": p.get("name", "Unknown"),
+                "role": p.get("title", "Buyer"),
+                "company": company,
+                "linkedin_url": p.get("linkedin_url"),
+                "email": email_display,
+                "source": "Apollo.io",
+            })
+        return contacts
+    except Exception as e:
+        # Fall back to Apify LinkedIn search if Apollo fails
+        return _linkedin_search_fallback(company)
+
+
+def _linkedin_search_fallback(company: str) -> list[dict]:
+    """Apify Google search for LinkedIn profiles — used when Apollo key is absent or fails."""
+    query = f'site:linkedin.com/in "{company}" (sourcing OR buyer OR procurement)'
     results = apify_google_search(query, max_results=5)
     contacts = []
     for r in results:
-        title_parts = (r.get("title") or "").split(" - ")
-        name = title_parts[0].strip() if title_parts else "Unknown"
-        role = title_parts[1].strip() if len(title_parts) > 1 else "Buyer"
+        parts = (r.get("title") or "").split(" - ")
         contacts.append({
-            "name": name,
-            "role": role,
+            "name": parts[0].strip() if parts else "Unknown",
+            "role": parts[1].strip() if len(parts) > 1 else "Buyer",
             "company": company,
             "linkedin_url": r.get("url"),
-            "snippet": r.get("description", "")[:120],
+            "email": "Add Apollo.io key to reveal email",
+            "source": "Apify LinkedIn search (fallback)",
         })
     return contacts
 
@@ -182,7 +226,7 @@ async def run_pipeline_async(job_id: str, brand: str, category: str, country: st
         top_companies = category_map.get(category, [])[:2]
         linkedin_contacts = []
         for company in top_companies:
-            contacts = await asyncio.to_thread(find_linkedin_contacts, company)
+            contacts = await asyncio.to_thread(apollo_people_search, company)
             linkedin_contacts.extend(contacts)
         jobs[job_id]["linkedin_contacts"] = linkedin_contacts
         jobs[job_id]["stage"] = "Scraping social intelligence…"
@@ -260,10 +304,11 @@ async def brand_from_doc(file: UploadFile = File(...)):
 
 
 @app.get("/api/brand/enrich-contacts")
-async def enrich_contacts(company: str, role: str = "sourcing OR buyer OR procurement"):
-    """Find LinkedIn profiles of buyers at a given company via Apify Google Search."""
-    contacts = await asyncio.to_thread(find_linkedin_contacts, company, role)
-    return {"company": company, "contacts": contacts, "source": "Apify google-search-scraper → site:linkedin.com"}
+async def enrich_contacts(company: str):
+    """Find buyer contacts at a company via Apollo.io (with Apify LinkedIn search fallback)."""
+    contacts = await asyncio.to_thread(apollo_people_search, company)
+    source = "Apollo.io" if APOLLO_KEY else "Apify google-search-scraper → site:linkedin.com (fallback)"
+    return {"company": company, "contacts": contacts, "source": source, "apollo_key_set": bool(APOLLO_KEY)}
 
 
 @app.get("/api/health")
