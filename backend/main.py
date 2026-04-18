@@ -58,6 +58,28 @@ def apify_google_search(query: str, max_results: int = 20) -> list[dict]:
     return items[:max_results]
 
 
+def find_linkedin_contacts(company: str, role_keywords: str = "sourcing OR buyer OR procurement") -> list[dict]:
+    """
+    Use Apify Google Search to find LinkedIn profiles of buyers at a given company.
+    Returns list of {name, title, linkedin_url} dicts.
+    """
+    query = f'site:linkedin.com/in "{company}" ({role_keywords})'
+    results = apify_google_search(query, max_results=5)
+    contacts = []
+    for r in results:
+        title_parts = (r.get("title") or "").split(" - ")
+        name = title_parts[0].strip() if title_parts else "Unknown"
+        role = title_parts[1].strip() if len(title_parts) > 1 else "Buyer"
+        contacts.append({
+            "name": name,
+            "role": role,
+            "company": company,
+            "linkedin_url": r.get("url"),
+            "snippet": r.get("description", "")[:120],
+        })
+    return contacts
+
+
 def apify_scrape_url(url: str) -> str:
     """Scrape a brand website using Apify website-content-crawler. Returns extracted text."""
     try:
@@ -144,17 +166,35 @@ async def run_pipeline_async(job_id: str, brand: str, category: str, country: st
     jobs[job_id]["stage"] = "Scanning US buyers via Apify…"
 
     try:
+        # Step 1: Buyer discovery
         query = build_buyer_query(brand, category, brand_brief)
         buyer_results = await asyncio.to_thread(apify_google_search, query, 20)
         jobs[job_id]["buyer_results"] = buyer_results
+        jobs[job_id]["stage"] = "Finding buyer contacts via LinkedIn search…"
+
+        # Step 2: Contact enrichment — real LinkedIn search for top companies found
+        category_map = {
+            "Handloom textiles & apparel": ["Anthropologie", "World Market", "Reformation"],
+            "Organic food & agriculture":  ["Whole Foods Market", "Thrive Market", "Sprouts"],
+            "Handicrafts & home goods":    ["West Elm", "Ten Thousand Villages", "World Market"],
+            "Beauty & wellness":           ["The Detox Market", "Credo Beauty", "Grove Collaborative"],
+        }
+        top_companies = category_map.get(category, [])[:2]
+        linkedin_contacts = []
+        for company in top_companies:
+            contacts = await asyncio.to_thread(find_linkedin_contacts, company)
+            linkedin_contacts.extend(contacts)
+        jobs[job_id]["linkedin_contacts"] = linkedin_contacts
         jobs[job_id]["stage"] = "Scraping social intelligence…"
 
+        # Step 3: Social intelligence
         social_query = f'{brand} {category} ethical sustainable US consumer Instagram TikTok'
         social_results = await asyncio.to_thread(apify_google_search, social_query, 10)
         jobs[job_id]["social_results"] = social_results
         jobs[job_id]["stage"] = "Building GTM report…"
 
         report = build_gtm_report(brand, category, buyer_results, social_results, brand_brief)
+        report["linkedin_contacts"] = linkedin_contacts
         jobs[job_id].update({"status": "complete", "stage": "Done", "report": report})
 
     except Exception as e:
@@ -217,6 +257,13 @@ async def brand_from_doc(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Unsupported file type. Upload PDF, DOCX, or TXT.")
 
     return {"filename": file.filename, "text": text, "chars": len(text)}
+
+
+@app.get("/api/brand/enrich-contacts")
+async def enrich_contacts(company: str, role: str = "sourcing OR buyer OR procurement"):
+    """Find LinkedIn profiles of buyers at a given company via Apify Google Search."""
+    contacts = await asyncio.to_thread(find_linkedin_contacts, company, role)
+    return {"company": company, "contacts": contacts, "source": "Apify google-search-scraper → site:linkedin.com"}
 
 
 @app.get("/api/health")

@@ -27,7 +27,7 @@ export default function Hero() {
           >
             <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 text-cream/90 text-xs font-medium px-4 py-1.5 rounded-full mb-8 backdrop-blur-sm">
               <span className="w-1.5 h-1.5 bg-terracotta rounded-full animate-pulse" />
-              GTM platform for South Asian & African premium brands
+              GTM platform for artisan brands across South Asia, Africa & Latin America
             </div>
 
             <h1 className="text-5xl md:text-7xl font-bold text-cream leading-tight tracking-tight mb-6">
@@ -36,11 +36,28 @@ export default function Hero() {
               global shelves.
             </h1>
 
-            <p className="text-cream/70 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-10">
+            <p className="text-cream/70 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-6">
               We partner with established brands like <span className="text-cream font-medium">Aarong</span> to crack the US market —
               finding buyers, automating outreach, creating content, and building the distribution channel
               they've never had access to.
             </p>
+
+            {/* Country strip */}
+            <div className="flex flex-wrap items-center justify-center gap-2 mb-10">
+              {[
+                { flag: '🇧🇩', name: 'Bangladesh' },
+                { flag: '🇮🇳', name: 'India' },
+                { flag: '🇵🇰', name: 'Pakistan' },
+                { flag: '🇱🇰', name: 'Sri Lanka' },
+                { flag: '🇦🇫', name: 'Afghanistan' },
+                { flag: '🇬🇹', name: 'Guatemala' },
+                { flag: '🇰🇪', name: 'Kenya' },
+                { flag: '🇬🇭', name: 'Ghana' },
+              ].map(c => (
+                <span key={c.name} className="inline-flex items-center gap-1.5 bg-white/8 border border-white/15 text-cream/70 text-xs px-3 py-1 rounded-full backdrop-blur-sm">
+                  {c.flag} {c.name}
+                </span>
+              ))}</div>
 
             <div className="flex flex-wrap items-center justify-center gap-4">
               <Link

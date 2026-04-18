@@ -35,12 +35,13 @@ const LOG_TIMELINE = [
   { t: 4600,  k: 'apify',   company: 'The Detox Market', segment: 'Clean beauty buyer',              score: 0.83 },
   { t: 5000,  k: 'apify',   company: 'Package Free Shop', segment: 'Zero-waste sourcing',           score: 0.81 },
   { t: 5600,  k: 'success', txt: '[Apify] 2,400 companies scanned · 62 high-fit ICP matches found (conf ≥ 0.80)' },
-  { t: 6300,  k: 'info',    txt: 'Contact Enricher: finding emails + LinkedIn profiles for 62 buyers…' },
-  { t: 6800,  k: 'enrich',  name: 'Sarah Chen',       title: 'VP Sourcing, Anthropologie',         email: 's.chen@anthropologie.com' },
-  { t: 7100,  k: 'enrich',  name: 'Marcus Webb',      title: 'Ethical Goods Dir., World Market',   email: 'm.webb@worldmarket.com' },
-  { t: 7400,  k: 'enrich',  name: 'Priya Nair',       title: 'Global Buyer, Whole Foods',          email: 'p.nair@wholefoods.com' },
-  { t: 7700,  k: 'enrich',  name: 'Tom Kiely',        title: 'Founder, Ten Thousand Villages',     email: 't.kiely@tenv.org' },
-  { t: 8100,  k: 'success', txt: '38 verified contacts enriched · 24 emails + LinkedIn URLs confirmed' },
+  { t: 6300,  k: 'info',    txt: 'Contact Enricher: searching LinkedIn via Apify (site:linkedin.com query per company)…' },
+  { t: 6600,  k: 'info',    txt: '[Apify] Query: site:linkedin.com/in "Anthropologie" (sourcing OR buyer OR procurement)' },
+  { t: 6800,  k: 'enrich',  name: 'Sarah Chen',       title: 'VP Sourcing, Anthropologie',         email: 'LinkedIn profile found · email via Hunter.io' },
+  { t: 7100,  k: 'enrich',  name: 'Marcus Webb',      title: 'Ethical Goods Dir., World Market',   email: 'LinkedIn profile found · email via Hunter.io' },
+  { t: 7400,  k: 'info',    txt: '[Apify] Query: site:linkedin.com/in "Whole Foods" (sourcing OR buyer OR procurement)' },
+  { t: 7700,  k: 'enrich',  name: 'Priya Nair',       title: 'Global Buyer, Whole Foods',          email: 'LinkedIn profile found · email via Hunter.io' },
+  { t: 8100,  k: 'success', txt: 'Contact enrichment complete · LinkedIn profiles found via Apify · emails resolved via Hunter.io domain search' },
   { t: 8900,  k: 'info',    txt: 'Outreach Agent: drafting personalized buyer pitches…' },
   { t: 9400,  k: 'email',   to: 'Sarah Chen', subject: 'Aarong handloom textiles — premium sourcing opportunity for Anthropologie' },
   { t: 9800,  k: 'email',   to: 'Marcus Webb', subject: 'Artisan jamdani weaves from Bangladesh — World Market fit' },
@@ -393,21 +394,22 @@ export default function Dashboard() {
             clearInterval(pollRef.current)
             const result = await fetch(`${API_BASE}/api/pipeline/results/${data.job_id}`).then(r => r.json())
             setRealLeads(result.top_leads || [])
-            // Inject real leads into log
+            const newEntries = [{ k: 'info', txt: '[Apify] ✓ Real scrape complete — injecting live results…' }]
             if (result.top_leads?.length) {
-              const realEntries = result.top_leads.slice(0, 5).map(l => ({
-                k: 'apify',
-                company: l.company,
+              result.top_leads.slice(0, 5).forEach(l => newEntries.push({
+                k: 'apify', company: l.company,
                 segment: l.snippet?.slice(0, 70) || 'US buyer',
-                score: l.score,
-                real: true,
+                score: l.score, real: true,
               }))
-              setLogEntries(prev => [
-                ...prev,
-                { k: 'info', txt: '[Apify] ✓ Real scrape complete — injecting live results…' },
-                ...realEntries,
-              ])
             }
+            if (result.linkedin_contacts?.length) {
+              newEntries.push({ k: 'info', txt: '[Apify] LinkedIn contact search complete — real profiles found:' })
+              result.linkedin_contacts.slice(0, 3).forEach(c => newEntries.push({
+                k: 'enrich', name: c.name, title: `${c.role} · ${c.company}`,
+                email: c.linkedin_url ? '↗ LinkedIn profile found' : 'Profile pending',
+              }))
+            }
+            setLogEntries(prev => [...prev, ...newEntries])
           }
         } catch { clearInterval(pollRef.current) }
       }, 4000)
