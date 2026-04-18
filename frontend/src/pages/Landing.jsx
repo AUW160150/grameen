@@ -2,6 +2,7 @@ import Nav from '../components/Nav'
 import Hero from '../components/Hero'
 import HowItWorks from '../components/HowItWorks'
 import BrandPartners from '../components/BrandPartners'
+import ApifyPower from '../components/ApifyPower'
 import Features from '../components/Features'
 import CreatorNetwork from '../components/CreatorNetwork'
 import Impact from '../components/Impact'
@@ -15,6 +16,7 @@ export default function Landing() {
       <Hero />
       <HowItWorks />
       <BrandPartners />
+      <ApifyPower />
       <Features />
       <CreatorNetwork />
       <Impact />

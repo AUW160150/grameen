@@ -52,7 +52,7 @@ export default function Impact() {
           <img
             src="/grameen1.jpg"
             alt="Bangladeshi cooperative members"
-            className="w-full h-64 object-cover object-center"
+            className="w-full h-72 object-cover object-top"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-bark/80 via-bark/40 to-transparent" />
           <div className="absolute inset-0 flex items-center px-10">

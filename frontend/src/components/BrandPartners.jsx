@@ -9,8 +9,8 @@ const BRANDS = [
     categories: ['Handloom textiles', 'Organic food', 'Handicrafts'],
     description: 'Bangladesh\'s most iconic lifestyle brand, built on rural artisan cooperatives. Premium handloom sarees, jamdani weaves, and organic goods.',
     usPotential: 'Specialty retail + DTC',
-    image: '/grameen-apparel.jpg',
-    fallbackImage: '/grameen1.jpg',
+    image: '/image2.jpg',
+    fallbackImage: '/grameen-apparel.jpg',
     highlight: true,
   },
   {
@@ -70,11 +70,11 @@ export default function BrandPartners() {
               }`}
             >
               {brand.image && (
-                <div className="relative h-36 overflow-hidden">
+                <div className={`relative overflow-hidden ${brand.highlight ? 'h-56' : 'h-36'}`}>
                   <img
                     src={brand.image}
                     alt={brand.name}
-                    className="w-full h-full object-cover object-center"
+                    className="w-full h-full object-cover object-top"
                     onError={e => { if (brand.fallbackImage) e.target.src = brand.fallbackImage }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-bark/70 to-transparent" />

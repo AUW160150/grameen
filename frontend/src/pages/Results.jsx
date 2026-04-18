@@ -291,6 +291,34 @@ export default function Results() {
         {/* ── REELS TAB ── */}
         {activeTab === 'reels' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+
+            {/* Artisan craft hero banner */}
+            <div className="relative rounded-2xl overflow-hidden mb-6 shadow-md">
+              <img
+                src="/brac_image.jpg"
+                alt="Artisans crafting textiles"
+                className="w-full h-56 object-cover object-center"
+                onError={e => e.target.src = '/grameen2.jpg'}
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-bark/75 via-bark/40 to-transparent" />
+              <div className="absolute inset-0 flex items-center px-8">
+                <div className="max-w-sm">
+                  <span className="text-xs font-semibold text-terracotta uppercase tracking-widest">Authentic content source</span>
+                  <h3 className="text-cream text-xl font-bold leading-snug mt-1 mb-2">
+                    Shot where it's made.
+                  </h3>
+                  <p className="text-cream/70 text-sm leading-relaxed">
+                    Every reel starts with real footage of the artisans and cooperatives behind these products.
+                    US audiences pay attention — and pay a premium — for this level of authenticity.
+                  </p>
+                </div>
+              </div>
+              <div className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-2 text-right">
+                <p className="text-cream text-xs font-medium">BRAC Artisan Collective</p>
+                <p className="text-cream/50 text-xs">Bangladesh</p>
+              </div>
+            </div>
+
             <p className="text-sm text-bark-light mb-5">{R.reels.length} reels generated — ready to post</p>
             <div className="grid md:grid-cols-3 gap-6">
               {R.reels.map((reel, i) => (
@@ -334,21 +362,30 @@ export default function Results() {
             </div>
 
             {/* Skincare product section */}
-            <div className="mt-8 bg-white border border-cream-dark rounded-2xl p-6 flex gap-6 items-center">
-              <img src="/skincare.jpeg" alt="Natural skincare products"
-                className="w-28 h-28 object-cover rounded-xl shrink-0"
-                onError={e => e.target.style.display = 'none'} />
-              <div>
-                <p className="text-xs text-terracotta font-medium uppercase tracking-widest mb-1">Additional product line detected</p>
-                <p className="font-semibold text-bark mb-1">Natural skincare & organic wellness</p>
-                <p className="text-sm text-bark-light leading-relaxed">
-                  Agents detected a skincare product line in the brand profile.
-                  3 additional reels can be generated targeting the US clean beauty segment
-                  (Credo Beauty, The Detox Market, Erewhon).
-                </p>
-                <button className="mt-3 bg-terracotta/10 text-terracotta text-xs font-medium px-4 py-2 rounded-full hover:bg-terracotta hover:text-cream transition-colors">
-                  Generate skincare reels →
-                </button>
+            <div className="mt-8 relative rounded-2xl overflow-hidden border border-cream-dark shadow-sm">
+              <div className="flex flex-col md:flex-row">
+                <div className="md:w-64 shrink-0">
+                  <img src="/skincare.jpeg" alt="Natural skincare products"
+                    className="w-full h-52 md:h-full object-cover"
+                    onError={e => e.target.style.display = 'none'} />
+                </div>
+                <div className="bg-white p-7 flex flex-col justify-center">
+                  <p className="text-xs text-terracotta font-medium uppercase tracking-widest mb-2">Additional product line detected</p>
+                  <p className="font-bold text-bark text-lg mb-2">Natural skincare & organic wellness</p>
+                  <p className="text-sm text-bark-light leading-relaxed mb-4">
+                    Agents detected a skincare product line in the brand profile.
+                    3 additional reels can be generated targeting the US clean beauty segment —
+                    Credo Beauty, The Detox Market, and Erewhon. Average order value: $65–$120.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button className="bg-terracotta text-cream text-xs font-semibold px-5 py-2.5 rounded-full hover:bg-bark-light transition-colors">
+                      Generate skincare reels →
+                    </button>
+                    <button className="border border-cream-dark text-bark-light text-xs px-4 py-2.5 rounded-full hover:border-bark transition-colors">
+                      View US clean beauty buyers
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
