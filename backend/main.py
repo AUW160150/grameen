@@ -1,10 +1,12 @@
-import os, asyncio, uuid
+import os, asyncio, uuid, io
 from dotenv import load_dotenv
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from apify_client import ApifyClient
 from typing import Optional
+import pdfplumber
+import docx
 
 load_dotenv()
 
@@ -19,7 +21,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory job store (fine for hackathon)
 jobs: dict[str, dict] = {}
 
 
@@ -28,6 +29,7 @@ class PipelineRequest(BaseModel):
     category: str
     country: str = "Bangladesh"
     description: str = ""
+    brand_brief: str = ""  # parsed content from URL or document
 
 
 class SocialRequest(BaseModel):
@@ -38,7 +40,6 @@ class SocialRequest(BaseModel):
 # ── helpers ──────────────────────────────────────────────────────────
 
 def apify_google_search(query: str, max_results: int = 20) -> list[dict]:
-    """Run apify/google-search-scraper and return results."""
     run = client.actor("apify/google-search-scraper").call(run_input={
         "queries": query,
         "maxPagesPerQuery": 1,
@@ -57,7 +58,51 @@ def apify_google_search(query: str, max_results: int = 20) -> list[dict]:
     return items[:max_results]
 
 
-def build_gtm_report(brand: str, category: str, buyer_results: list, social_results: list) -> dict:
+def apify_scrape_url(url: str) -> str:
+    """Scrape a brand website using Apify website-content-crawler. Returns extracted text."""
+    try:
+        run = client.actor("apify/website-content-crawler").call(run_input={
+            "startUrls": [{"url": url}],
+            "maxCrawlPages": 5,
+            "maxCrawlDepth": 1,
+            "outputFormats": ["markdown"],
+        })
+        chunks = []
+        for item in client.dataset(run["defaultDatasetId"]).iterate_items():
+            text = item.get("markdown") or item.get("text") or ""
+            if text:
+                chunks.append(text[:2000])
+            if len(chunks) >= 3:
+                break
+        return "\n\n".join(chunks)[:5000]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"URL scrape failed: {str(e)}")
+
+
+def extract_text_from_pdf(data: bytes) -> str:
+    with pdfplumber.open(io.BytesIO(data)) as pdf:
+        pages = [p.extract_text() or "" for p in pdf.pages[:10]]
+    return "\n".join(pages)[:5000]
+
+
+def extract_text_from_docx(data: bytes) -> str:
+    doc = docx.Document(io.BytesIO(data))
+    return "\n".join(p.text for p in doc.paragraphs if p.text.strip())[:5000]
+
+
+def build_buyer_query(brand: str, category: str, brand_brief: str) -> str:
+    """Build a smart buyer search query, enriched by brand brief if provided."""
+    base = f'"{category}" buyer OR "sourcing manager" OR "wholesale supplier" United States ethical'
+    if brand_brief:
+        # Extract up to 3 keyword phrases from the brief to sharpen the query
+        words = [w for w in brand_brief.lower().split() if len(w) > 5]
+        unique = list(dict.fromkeys(words))[:6]
+        extras = " ".join(unique[:3])
+        return f'{base} {extras}'
+    return base
+
+
+def build_gtm_report(brand: str, category: str, buyer_results: list, social_results: list, brand_brief: str = "") -> dict:
     category_map = {
         "Handloom textiles & apparel": ["Anthropologie", "World Market", "Reformation", "Eileen Fisher"],
         "Organic food & agriculture":  ["Whole Foods Market", "Thrive Market", "Sprouts", "Natural Grocers"],
@@ -85,6 +130,7 @@ def build_gtm_report(brand: str, category: str, buyer_results: list, social_resu
     return {
         "brand": brand,
         "category": category,
+        "brand_brief_used": bool(brand_brief),
         "leads_found": len(leads),
         "top_leads": leads[:10],
         "suggested_channels": suggested,
@@ -93,25 +139,22 @@ def build_gtm_report(brand: str, category: str, buyer_results: list, social_resu
     }
 
 
-async def run_pipeline_async(job_id: str, brand: str, category: str, country: str, description: str):
+async def run_pipeline_async(job_id: str, brand: str, category: str, country: str, description: str, brand_brief: str):
     jobs[job_id]["status"] = "running"
     jobs[job_id]["stage"] = "Scanning US buyers via Apify…"
 
     try:
-        # 1 — Buyer intelligence scrape
-        query = f'"{category}" buyer OR sourcing manager OR wholesale supplier United States ethical'
+        query = build_buyer_query(brand, category, brand_brief)
         buyer_results = await asyncio.to_thread(apify_google_search, query, 20)
         jobs[job_id]["buyer_results"] = buyer_results
         jobs[job_id]["stage"] = "Scraping social intelligence…"
 
-        # 2 — Social intelligence scrape (hashtag / trend research)
         social_query = f'{brand} {category} ethical sustainable US consumer Instagram TikTok'
         social_results = await asyncio.to_thread(apify_google_search, social_query, 10)
         jobs[job_id]["social_results"] = social_results
         jobs[job_id]["stage"] = "Building GTM report…"
 
-        # 3 — Compile report
-        report = build_gtm_report(brand, category, buyer_results, social_results)
+        report = build_gtm_report(brand, category, buyer_results, social_results, brand_brief)
         jobs[job_id].update({"status": "complete", "stage": "Done", "report": report})
 
     except Exception as e:
@@ -125,7 +168,7 @@ async def start_pipeline(req: PipelineRequest, background_tasks: BackgroundTasks
     job_id = str(uuid.uuid4())
     jobs[job_id] = {"status": "queued", "stage": "Starting…", "brand": req.brand}
     background_tasks.add_task(
-        run_pipeline_async, job_id, req.brand, req.category, req.country, req.description
+        run_pipeline_async, job_id, req.brand, req.category, req.country, req.description, req.brand_brief
     )
     return {"job_id": job_id, "status": "queued"}
 
@@ -151,12 +194,36 @@ async def pipeline_results(job_id: str):
     return job.get("report", {"status": job["status"], "stage": job.get("stage")})
 
 
+@app.post("/api/brand/from-url")
+async def brand_from_url(url: str):
+    """Scrape a brand website via Apify and return extracted text for the GTM brief."""
+    text = await asyncio.to_thread(apify_scrape_url, url)
+    return {"url": url, "text": text, "chars": len(text)}
+
+
+@app.post("/api/brand/from-doc")
+async def brand_from_doc(file: UploadFile = File(...)):
+    """Parse an uploaded PDF, DOCX, or TXT file and return extracted text."""
+    data = await file.read()
+    filename = (file.filename or "").lower()
+
+    if filename.endswith(".pdf"):
+        text = extract_text_from_pdf(data)
+    elif filename.endswith(".docx"):
+        text = extract_text_from_docx(data)
+    elif filename.endswith(".txt"):
+        text = data.decode("utf-8", errors="replace")[:5000]
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Upload PDF, DOCX, or TXT.")
+
+    return {"filename": file.filename, "text": text, "chars": len(text)}
+
+
 @app.get("/api/health")
 async def health():
     return {"ok": True, "apify_key_set": bool(APIFY_KEY)}
 
 
-# Social scrape endpoint (for reel content ideas)
 @app.post("/api/social/scrape")
 async def social_scrape(req: SocialRequest):
     query = " ".join(req.keywords) + f" {req.platform} trending US ethical artisan"

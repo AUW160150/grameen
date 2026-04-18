@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowLeft, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Wifi, WifiOff, Globe, Upload, Mic, CheckCircle, Loader, X } from 'lucide-react'
 
 /* ── Design tokens (matching BioHarmonize pipeline aesthetic) ── */
 const C = {
@@ -304,17 +304,67 @@ export default function Dashboard() {
   const [done, setDone] = useState(false)
   const [running, setRunning] = useState(false)
   const navigate = useNavigate()
-  const [apiMode, setApiMode] = useState(null) // null | 'live' | 'demo'
+  const [apiMode, setApiMode] = useState(null)
   const [jobId, setJobId] = useState(null)
   const [realLeads, setRealLeads] = useState([])
   const logRef = useRef()
   const timers = useRef([])
   const pollRef = useRef(null)
 
+  // Brand setup state
+  const [inputMethod, setInputMethod] = useState('none') // 'none' | 'url' | 'upload' | 'voice'
+  const [brandUrl, setBrandUrl] = useState('')
+  const [uploadFile, setUploadFile] = useState(null)
+  const [briefStatus, setBriefStatus] = useState('idle') // 'idle' | 'loading' | 'ready' | 'error'
+  const [briefText, setBriefText] = useState('')
+  const [briefError, setBriefError] = useState('')
+
   function clearAll() {
     timers.current.forEach(id => { clearTimeout(id); clearInterval(id) })
     timers.current = []
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+  }
+
+  async function parseBrandUrl() {
+    if (!brandUrl.trim()) return
+    setBriefStatus('loading')
+    setBriefError('')
+    try {
+      const res = await fetch(`${API_BASE}/api/brand/from-url?url=${encodeURIComponent(brandUrl)}`, { method: 'POST' })
+      if (!res.ok) throw new Error('Scrape failed')
+      const data = await res.json()
+      setBriefText(data.text)
+      setBriefStatus('ready')
+    } catch (e) {
+      setBriefStatus('error')
+      setBriefError('Could not scrape that URL. Check the backend is running and the URL is accessible.')
+    }
+  }
+
+  async function parseBrandDoc() {
+    if (!uploadFile) return
+    setBriefStatus('loading')
+    setBriefError('')
+    try {
+      const form = new FormData()
+      form.append('file', uploadFile)
+      const res = await fetch(`${API_BASE}/api/brand/from-doc`, { method: 'POST', body: form })
+      if (!res.ok) throw new Error('Parse failed')
+      const data = await res.json()
+      setBriefText(data.text)
+      setBriefStatus('ready')
+    } catch (e) {
+      setBriefStatus('error')
+      setBriefError('Could not parse that file. Supported: PDF, DOCX, TXT.')
+    }
+  }
+
+  function clearBrief() {
+    setBriefText('')
+    setBriefStatus('idle')
+    setBriefError('')
+    setUploadFile(null)
+    setBrandUrl('')
   }
 
   // Try to fire a real Apify pipeline via backend
@@ -323,7 +373,12 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE}/api/pipeline/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brand: 'Aarong', category: 'Handloom textiles & apparel', country: 'Bangladesh' }),
+        body: JSON.stringify({
+          brand: 'Aarong',
+          category: 'Handloom textiles & apparel',
+          country: 'Bangladesh',
+          brand_brief: briefText,
+        }),
       })
       if (!res.ok) throw new Error('backend offline')
       const data = await res.json()
@@ -485,6 +540,133 @@ export default function Dashboard() {
           </button>
         </div>
       </nav>
+
+      {/* Brand Setup Panel — shown before pipeline runs */}
+      {!running && !done && (
+        <div style={{ padding: '12px 14px 0', flexShrink: 0 }}>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10,
+            padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                Brand Parser — Input source
+              </span>
+              {briefStatus === 'ready' && (
+                <button onClick={clearBrief} style={{ fontSize: 10, color: C.muted, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <X size={10} /> Clear
+                </button>
+              )}
+            </div>
+
+            {/* Method tabs */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[
+                { id: 'url', icon: Globe, label: 'Website URL' },
+                { id: 'upload', icon: Upload, label: 'Upload doc' },
+                { id: 'voice', icon: Mic, label: 'Voice' },
+              ].map(({ id, icon: Icon, label }) => (
+                <button key={id} onClick={() => { setInputMethod(id); clearBrief() }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px',
+                    borderRadius: 6, fontSize: 11, fontWeight: 500, cursor: 'pointer',
+                    border: `1px solid ${inputMethod === id ? C.accent : C.border}`,
+                    background: inputMethod === id ? 'rgba(196,113,58,0.06)' : C.s2,
+                    color: inputMethod === id ? C.accent : C.muted,
+                    fontFamily: 'inherit',
+                  }}>
+                  <Icon size={11} /> {label}
+                </button>
+              ))}
+              {inputMethod === 'none' && (
+                <span style={{ fontSize: 11, color: C.muted, alignSelf: 'center', marginLeft: 4 }}>
+                  — or skip to run with default Aarong profile
+                </span>
+              )}
+            </div>
+
+            {/* URL input */}
+            {inputMethod === 'url' && briefStatus !== 'ready' && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  value={brandUrl}
+                  onChange={e => setBrandUrl(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && parseBrandUrl()}
+                  placeholder="https://www.aarong.com  (or any brand website)"
+                  style={{
+                    flex: 1, padding: '7px 12px', fontSize: 12, borderRadius: 6,
+                    border: `1px solid ${C.border}`, fontFamily: 'inherit',
+                    background: C.bg, color: C.primary, outline: 'none',
+                  }}
+                />
+                <button onClick={parseBrandUrl} disabled={!brandUrl.trim() || briefStatus === 'loading'}
+                  style={{
+                    padding: '7px 14px', fontSize: 11, fontWeight: 600, borderRadius: 6,
+                    background: C.accent, color: 'white', border: 'none', cursor: 'pointer',
+                    fontFamily: 'inherit', opacity: !brandUrl.trim() ? 0.5 : 1,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}>
+                  {briefStatus === 'loading' ? <><Loader size={10} style={{ animation: 'spin 1s linear infinite' }} /> Scraping…</> : 'Scrape →'}
+                </button>
+              </div>
+            )}
+
+            {/* File upload */}
+            {inputMethod === 'upload' && briefStatus !== 'ready' && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <label style={{
+                  flex: 1, padding: '7px 12px', fontSize: 12, borderRadius: 6,
+                  border: `1px dashed ${C.border}`, background: C.s2, color: C.muted,
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <Upload size={12} />
+                  {uploadFile ? uploadFile.name : 'Choose PDF, DOCX, or TXT…'}
+                  <input type="file" accept=".pdf,.docx,.txt" style={{ display: 'none' }}
+                    onChange={e => { setUploadFile(e.target.files[0]); setBriefStatus('idle') }} />
+                </label>
+                <button onClick={parseBrandDoc} disabled={!uploadFile || briefStatus === 'loading'}
+                  style={{
+                    padding: '7px 14px', fontSize: 11, fontWeight: 600, borderRadius: 6,
+                    background: C.accent, color: 'white', border: 'none', cursor: 'pointer',
+                    fontFamily: 'inherit', opacity: !uploadFile ? 0.5 : 1,
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}>
+                  {briefStatus === 'loading' ? <><Loader size={10} style={{ animation: 'spin 1s linear infinite' }} /> Parsing…</> : 'Parse →'}
+                </button>
+              </div>
+            )}
+
+            {/* Voice note */}
+            {inputMethod === 'voice' && (
+              <p style={{ fontSize: 11, color: C.muted }}>
+                Voice onboarding is shown in the landing page demo (Whisper). For pipeline runs, use URL or upload to provide brand context.
+              </p>
+            )}
+
+            {/* Error */}
+            {briefStatus === 'error' && (
+              <p style={{ fontSize: 11, color: '#DC2626', background: '#FEF2F2', padding: '6px 10px', borderRadius: 6 }}>
+                {briefError}
+              </p>
+            )}
+
+            {/* Ready confirmation */}
+            {briefStatus === 'ready' && (
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, background: 'rgba(90,122,94,0.06)', border: '1px solid rgba(90,122,94,0.2)', borderRadius: 6, padding: '8px 12px' }}>
+                <CheckCircle size={13} color={C.success} style={{ marginTop: 1, flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: C.success, marginBottom: 2 }}>
+                    Brand brief ready — {briefText.length.toLocaleString()} chars extracted
+                  </p>
+                  <p style={{ fontSize: 10.5, color: C.muted, fontFamily: 'monospace', lineHeight: 1.5 }}>
+                    {briefText.slice(0, 180)}…
+                  </p>
+                </div>
+              </div>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* 3-column body */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', padding: '14px 14px 0', gap: 0 }}>
