@@ -1,12 +1,71 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowRight, CheckCircle, ArrowLeft } from 'lucide-react'
+import { useState, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { ArrowRight, CheckCircle, ArrowLeft, Globe, Upload, FileText, X } from 'lucide-react'
 import Nav from '../components/Nav'
+
+const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
 
 export default function Signup() {
   const [submitted, setSubmitted] = useState(false)
-  const [mode, setMode] = useState('brand') // 'brand' | 'creator'
-  const [form, setForm] = useState({ email: '', brand: '', country: '', category: '', revenue: '', description: '', handle: '', followers: '' })
+  const [mode, setMode] = useState('brand')
+  const [form, setForm] = useState({
+    email: '', brand: '', country: '', category: '',
+    revenue: '', description: '', handle: '', followers: '',
+    websiteUrl: '',
+  })
+  const [briefMethod, setBriefMethod] = useState(null) // null | 'url' | 'upload'
+  const [uploadFile, setUploadFile] = useState(null)
+  const [briefStatus, setBriefStatus] = useState('idle') // idle | loading | ready | error
+  const [briefPreview, setBriefPreview] = useState('')
+  const [briefError, setBriefError] = useState('')
+  const fileRef = useRef()
+  const navigate = useNavigate()
+
+  async function scrapeUrl() {
+    if (!form.websiteUrl.trim()) return
+    setBriefStatus('loading')
+    setBriefError('')
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/brand/from-url?url=${encodeURIComponent(form.websiteUrl)}`,
+        { method: 'POST' }
+      )
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setBriefPreview(data.text.slice(0, 300))
+      setBriefStatus('ready')
+    } catch {
+      setBriefStatus('error')
+      setBriefError('Could not reach that URL. Check the backend is running, or try uploading a document instead.')
+    }
+  }
+
+  async function parseDoc(file) {
+    if (!file) return
+    setUploadFile(file)
+    setBriefStatus('loading')
+    setBriefError('')
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`${API_BASE}/api/brand/from-doc`, { method: 'POST', body: fd })
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setBriefPreview(data.text.slice(0, 300))
+      setBriefStatus('ready')
+    } catch {
+      setBriefStatus('error')
+      setBriefError('Could not parse that file. Try PDF, DOCX, or TXT.')
+    }
+  }
+
+  function clearBrief() {
+    setBriefStatus('idle')
+    setBriefPreview('')
+    setBriefError('')
+    setUploadFile(null)
+    setForm(f => ({ ...f, websiteUrl: '' }))
+  }
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -23,15 +82,27 @@ export default function Signup() {
               <CheckCircle size={32} className="text-sage" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-bark mb-2">You're in the queue</h2>
+              <h2 className="text-2xl font-bold text-bark mb-2">
+                {mode === 'brand' ? 'Application received' : "You're in the queue"}
+              </h2>
               <p className="text-bark-light text-sm leading-relaxed">
-                We review applications within 48 hours. You'll get a calendar invite to set up
-                your brand's GTM brief and kick off your Apify buyer scan.
+                {mode === 'brand'
+                  ? briefStatus === 'ready'
+                    ? "We've parsed your brand brief. Your Apify buyer scan is being queued — you'll see results in the dashboard within minutes."
+                    : "We review applications within 48 hours. You'll get a calendar invite to kick off your brand's GTM scan."
+                  : "We review applications within 48 hours. You'll get a calendar invite to set up your first affiliate reel."}
               </p>
             </div>
+            {mode === 'brand' && briefStatus === 'ready' && (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="bg-terracotta text-cream px-6 py-3 rounded-full font-semibold text-sm hover:bg-bark-light transition-colors flex items-center gap-2"
+              >
+                Go to dashboard <ArrowRight size={14} />
+              </button>
+            )}
             <Link to="/" className="flex items-center gap-2 text-sm text-bark-light hover:text-bark">
-              <ArrowLeft size={14} />
-              Back to home
+              <ArrowLeft size={14} /> Back to home
             </Link>
           </div>
         </div>
@@ -45,8 +116,7 @@ export default function Signup() {
       <div className="flex-1 flex items-center justify-center px-6 pt-16 py-16">
         <div className="max-w-xl w-full">
           <Link to="/" className="flex items-center gap-2 text-sm text-bark-light hover:text-bark mb-8">
-            <ArrowLeft size={14} />
-            Back
+            <ArrowLeft size={14} /> Back
           </Link>
 
           <div className="mb-6">
@@ -69,9 +139,9 @@ export default function Signup() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="bg-white border border-cream-dark rounded-2xl p-8 flex flex-col gap-4 shadow-sm">
+          <form onSubmit={handleSubmit} className="bg-white border border-cream-dark rounded-2xl p-8 flex flex-col gap-5 shadow-sm">
 
-            {/* Email — always shown */}
+            {/* Email */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-bark">Email *</label>
               <input required type="email" value={form.email}
@@ -98,6 +168,7 @@ export default function Signup() {
                       className="border border-cream-dark rounded-xl px-4 py-2.5 text-sm text-bark placeholder:text-bark-light/40 outline-none focus:border-terracotta/40" />
                   </div>
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-bark">Annual revenue</label>
@@ -124,11 +195,111 @@ export default function Signup() {
                     </select>
                   </div>
                 </div>
+
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-bark">Tell us about your brand</label>
                   <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
                     placeholder="What makes your brand special? Do you already export? What US channels interest you?"
-                    rows={3} className="border border-cream-dark rounded-xl px-4 py-3 text-sm text-bark placeholder:text-bark-light/40 outline-none focus:border-terracotta/40 resize-none" />
+                    rows={2} className="border border-cream-dark rounded-xl px-4 py-3 text-sm text-bark placeholder:text-bark-light/40 outline-none focus:border-terracotta/40 resize-none" />
+                </div>
+
+                {/* ── Brand materials section ── */}
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-bark block mb-0.5">Brand materials</label>
+                    <p className="text-xs text-bark-light">Share your website or a document so our agents can build your GTM brief immediately.</p>
+                  </div>
+
+                  {/* Method toggle */}
+                  {briefStatus !== 'ready' && (
+                    <div className="flex gap-2">
+                      <button type="button"
+                        onClick={() => { setBriefMethod('url'); clearBrief() }}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                          briefMethod === 'url'
+                            ? 'bg-terracotta/8 border-terracotta/30 text-terracotta'
+                            : 'bg-cream border-cream-dark text-bark-light hover:text-bark'
+                        }`}>
+                        <Globe size={12} /> Website URL
+                      </button>
+                      <button type="button"
+                        onClick={() => { setBriefMethod('upload'); clearBrief() }}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                          briefMethod === 'upload'
+                            ? 'bg-terracotta/8 border-terracotta/30 text-terracotta'
+                            : 'bg-cream border-cream-dark text-bark-light hover:text-bark'
+                        }`}>
+                        <Upload size={12} /> Upload doc
+                      </button>
+                      <span className="self-center text-xs text-bark-light/50">PDF · DOCX · TXT</span>
+                    </div>
+                  )}
+
+                  {/* URL input */}
+                  {briefMethod === 'url' && briefStatus !== 'ready' && (
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        value={form.websiteUrl}
+                        onChange={e => setForm({ ...form, websiteUrl: e.target.value })}
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), scrapeUrl())}
+                        placeholder="https://www.aarong.com"
+                        className="flex-1 border border-cream-dark rounded-xl px-4 py-2.5 text-sm text-bark placeholder:text-bark-light/40 outline-none focus:border-terracotta/40"
+                      />
+                      <button type="button" onClick={scrapeUrl}
+                        disabled={!form.websiteUrl.trim() || briefStatus === 'loading'}
+                        className="bg-terracotta text-cream text-xs font-semibold px-4 py-2.5 rounded-xl hover:bg-bark-light transition-colors disabled:opacity-50 whitespace-nowrap">
+                        {briefStatus === 'loading' ? 'Scraping…' : 'Scrape →'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* File upload */}
+                  {briefMethod === 'upload' && briefStatus !== 'ready' && (
+                    <label className="flex items-center gap-3 border-2 border-dashed border-cream-dark rounded-xl px-4 py-4 cursor-pointer hover:border-terracotta/40 transition-colors">
+                      <div className="w-9 h-9 bg-cream-dark rounded-lg flex items-center justify-center shrink-0">
+                        <FileText size={16} className="text-bark-light" />
+                      </div>
+                      <div className="flex-1">
+                        {briefStatus === 'loading' ? (
+                          <p className="text-xs text-bark-light">Parsing document…</p>
+                        ) : uploadFile ? (
+                          <p className="text-xs text-bark font-medium">{uploadFile.name}</p>
+                        ) : (
+                          <>
+                            <p className="text-xs font-medium text-bark">Drop your brand deck, catalog, or brief</p>
+                            <p className="text-xs text-bark-light mt-0.5">PDF, DOCX, or TXT · up to 10MB</p>
+                          </>
+                        )}
+                      </div>
+                      <input type="file" accept=".pdf,.docx,.txt" className="hidden"
+                        ref={fileRef}
+                        onChange={e => { if (e.target.files[0]) parseDoc(e.target.files[0]) }} />
+                    </label>
+                  )}
+
+                  {/* Error */}
+                  {briefStatus === 'error' && (
+                    <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{briefError}</p>
+                  )}
+
+                  {/* Ready state */}
+                  {briefStatus === 'ready' && (
+                    <div className="flex items-start gap-3 bg-sage/5 border border-sage/20 rounded-xl p-4">
+                      <CheckCircle size={16} className="text-sage mt-0.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-sage mb-1">
+                          Brand brief extracted — agents are ready to run
+                        </p>
+                        <p className="text-xs text-bark-light font-mono leading-relaxed line-clamp-3">
+                          {briefPreview}…
+                        </p>
+                      </div>
+                      <button type="button" onClick={clearBrief} className="shrink-0 text-bark-light hover:text-bark">
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (
@@ -182,10 +353,16 @@ export default function Signup() {
             )}
 
             <button type="submit"
-              className="bg-terracotta text-cream px-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-bark-light transition-colors text-sm mt-2">
+              className="bg-terracotta text-cream px-6 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-bark-light transition-colors text-sm mt-1">
               {mode === 'brand' ? 'Submit brand application' : 'Apply as creator'}
               <ArrowRight size={16} />
             </button>
+
+            {mode === 'brand' && briefStatus === 'ready' && (
+              <p className="text-xs text-center text-bark-light -mt-2">
+                Your brief will be used immediately to run the buyer scan
+              </p>
+            )}
           </form>
         </div>
       </div>
