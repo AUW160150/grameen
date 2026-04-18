@@ -197,6 +197,35 @@ export default function Results() {
         {/* ── LEADS TAB ── */}
         {activeTab === 'leads' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col gap-3">
+
+            {/* Provenance card — attached to every buyer pitch */}
+            <div className="relative rounded-2xl overflow-hidden mb-2 shadow-md">
+              <img
+                src="/grameen2.jpg"
+                alt="Artisans weaving at the cooperative"
+                className="w-full h-52 object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-bark/80 via-bark/50 to-transparent" />
+              <div className="absolute inset-0 flex items-center px-8">
+                <div className="max-w-sm">
+                  <span className="text-xs font-semibold text-terracotta uppercase tracking-widest">
+                    Attached to every buyer pitch
+                  </span>
+                  <h3 className="text-cream text-xl font-bold leading-snug mt-1 mb-2">
+                    This is where your goods come from.
+                  </h3>
+                  <p className="text-cream/70 text-sm leading-relaxed">
+                    Each outreach email includes this provenance story — real artisans, real cooperative,
+                    traceable supply chain. US ethical buyers pay a premium for exactly this.
+                  </p>
+                </div>
+              </div>
+              <div className="absolute bottom-4 right-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-4 py-2 text-right">
+                <p className="text-cream text-xs font-medium">Sundarbans Cooperative</p>
+                <p className="text-cream/50 text-xs">Khulna, Bangladesh</p>
+              </div>
+            </div>
+
             <p className="text-sm text-bark-light mb-1">Top {R.topLeads.length} high-fit US buyers — sorted by ICP match score</p>
             {R.topLeads.map((lead, i) => (
               <div key={i} className="bg-white border border-cream-dark rounded-2xl p-5 flex items-center gap-5">
