@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowRight, CheckCircle, ArrowLeft, Globe, Upload, FileText, X } from 'lucide-react'
+import { ArrowRight, CheckCircle, ArrowLeft, Globe, Upload, FileText, X, Mic, MicOff } from 'lucide-react'
 import Nav from '../components/Nav'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000'
@@ -20,6 +20,54 @@ export default function Signup() {
   const [briefError, setBriefError] = useState('')
   const fileRef = useRef()
   const navigate = useNavigate()
+  const recognitionRef = useRef(null)
+  const [voiceState, setVoiceState] = useState('idle') // idle | recording | unsupported
+  const [voiceLang, setVoiceLang] = useState('en-US')
+
+  const VOICE_LANGS = [
+    { code: 'en-US', label: 'English' },
+    { code: 'bn-BD', label: 'বাংলা' },
+    { code: 'hi-IN', label: 'हिन्दी' },
+    { code: 'ur-PK', label: 'اردو' },
+    { code: 'si-LK', label: 'සිංහල' },
+    { code: 'es-GT', label: 'Español' },
+    { code: 'sw-KE', label: 'Swahili' },
+  ]
+
+  function toggleVoice() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SR) { setVoiceState('unsupported'); return }
+
+    if (voiceState === 'recording') {
+      recognitionRef.current?.stop()
+      setVoiceState('idle')
+      return
+    }
+
+    const rec = new SR()
+    rec.lang = voiceLang
+    rec.continuous = true
+    rec.interimResults = true
+    recognitionRef.current = rec
+
+    let finalText = form.description
+
+    rec.onresult = (e) => {
+      let interim = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) finalText += (finalText ? ' ' : '') + t
+        else interim = t
+      }
+      setForm(f => ({ ...f, description: finalText + (interim ? ' ' + interim : '') }))
+    }
+    rec.onerror = () => setVoiceState('idle')
+    rec.onend = () => setVoiceState('idle')
+    rec.start()
+    setVoiceState('recording')
+  }
+
+  useEffect(() => () => recognitionRef.current?.stop(), [])
 
   async function scrapeUrl() {
     if (!form.websiteUrl.trim()) return
@@ -197,10 +245,57 @@ export default function Signup() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-bark">Tell us about your brand</label>
-                  <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                    placeholder="What makes your brand special? Do you already export? What US channels interest you?"
-                    rows={2} className="border border-cream-dark rounded-xl px-4 py-3 text-sm text-bark placeholder:text-bark-light/40 outline-none focus:border-terracotta/40 resize-none" />
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-bark">Tell us about your brand</label>
+                    <div className="flex items-center gap-2">
+                      {/* Language selector */}
+                      <select
+                        value={voiceLang}
+                        onChange={e => setVoiceLang(e.target.value)}
+                        className="text-xs border border-cream-dark rounded-lg px-2 py-1 text-bark-light bg-cream outline-none"
+                      >
+                        {VOICE_LANGS.map(l => (
+                          <option key={l.code} value={l.code}>{l.label}</option>
+                        ))}
+                      </select>
+                      {/* Mic button */}
+                      <button
+                        type="button"
+                        onClick={toggleVoice}
+                        title={voiceState === 'unsupported' ? 'Voice not supported in this browser' : voiceState === 'recording' ? 'Stop recording' : 'Speak your brand story'}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          voiceState === 'recording'
+                            ? 'bg-red-50 border-red-200 text-red-600 animate-pulse'
+                            : voiceState === 'unsupported'
+                            ? 'bg-cream border-cream-dark text-bark-light/40 cursor-not-allowed'
+                            : 'bg-cream border-cream-dark text-bark-light hover:border-terracotta/40 hover:text-terracotta'
+                        }`}
+                      >
+                        {voiceState === 'recording' ? <MicOff size={11} /> : <Mic size={11} />}
+                        {voiceState === 'recording' ? 'Stop' : 'Speak'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {voiceState === 'recording' && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-100 rounded-lg">
+                      <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse shrink-0" />
+                      <span className="text-xs text-red-600">Recording in {VOICE_LANGS.find(l => l.code === voiceLang)?.label} — speak now, text appears below</span>
+                    </div>
+                  )}
+                  {voiceState === 'unsupported' && (
+                    <p className="text-xs text-bark-light">Voice input requires Chrome or Edge. Use the text box instead.</p>
+                  )}
+
+                  <textarea
+                    value={form.description}
+                    onChange={e => setForm({ ...form, description: e.target.value })}
+                    placeholder="What makes your brand special? Do you already export? What US channels interest you? — or press Speak to record in your language"
+                    rows={3}
+                    className={`border rounded-xl px-4 py-3 text-sm text-bark placeholder:text-bark-light/40 outline-none resize-none transition-colors ${
+                      voiceState === 'recording' ? 'border-red-200 bg-red-50/30' : 'border-cream-dark focus:border-terracotta/40'
+                    }`}
+                  />
                 </div>
 
                 {/* ── Brand materials section ── */}
